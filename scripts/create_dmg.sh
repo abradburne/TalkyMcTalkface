@@ -2,10 +2,9 @@
 #
 # DMG creation script for TalkyMcTalkface
 #
-# Creates a branded DMG distribution package with:
+# Creates a DMG distribution package with:
 # - App icon
 # - Applications folder alias for drag-to-install
-# - Background image with install instructions
 # - Configured window size and icon positions
 # - Code signature on the DMG itself
 #
@@ -38,16 +37,13 @@ OUTPUT_DMG="${2:-${PROJECT_ROOT}/dist/TalkyMcTalkface.dmg}"
 
 # DMG settings
 DMG_VOLUME_NAME="TalkyMcTalkface"
-DMG_WINDOW_WIDTH=600
-DMG_WINDOW_HEIGHT=400
+DMG_WINDOW_WIDTH=540
+DMG_WINDOW_HEIGHT=380
 DMG_ICON_SIZE=128
-DMG_APP_X=150
-DMG_APP_Y=200
-DMG_APPS_X=450
-DMG_APPS_Y=200
-
-# Background image (will be created if not exists)
-DMG_BACKGROUND="${PROJECT_ROOT}/resources/dmg-background.png"
+DMG_APP_X=135
+DMG_APP_Y=170
+DMG_APPS_X=405
+DMG_APPS_Y=170
 
 # Signing identity
 SIGNING_IDENTITY="${CODESIGN_IDENTITY:-}"
@@ -78,98 +74,6 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Create a simple background image with install instructions
-create_background_image() {
-    local output_path="$1"
-    local width="$2"
-    local height="$3"
-
-    log_info "Creating DMG background image..."
-
-    # Create directory if needed
-    mkdir -p "$(dirname "${output_path}")"
-
-    # Use sips to create a simple colored background, then use Python for text
-    # First create a blank image with a gradient-like color
-    local temp_png="/tmp/dmg_bg_temp.png"
-
-    # Check if Python with PIL is available for creating background
-    if python3 -c "from PIL import Image, ImageDraw, ImageFont" 2>/dev/null; then
-        python3 << EOF
-from PIL import Image, ImageDraw, ImageFont
-
-# Create image with gradient
-width, height = ${width}, ${height}
-img = Image.new('RGB', (width, height))
-
-# Create a subtle gradient from dark to light blue-gray
-for y in range(height):
-    r = int(45 + (y / height) * 15)
-    g = int(52 + (y / height) * 18)
-    b = int(65 + (y / height) * 25)
-    for x in range(width):
-        img.putpixel((x, y), (r, g, b))
-
-draw = ImageDraw.Draw(img)
-
-# Add install instructions text at bottom
-try:
-    # Try to use a system font
-    font = ImageFont.truetype('/System/Library/Fonts/SFCompact.ttf', 16)
-except:
-    try:
-        font = ImageFont.truetype('/System/Library/Fonts/Helvetica.ttc', 16)
-    except:
-        font = ImageFont.load_default()
-
-text = "Drag TalkyMcTalkface to Applications to install"
-bbox = draw.textbbox((0, 0), text, font=font)
-text_width = bbox[2] - bbox[0]
-text_x = (width - text_width) // 2
-text_y = height - 50
-
-# Draw text with shadow for visibility
-draw.text((text_x + 1, text_y + 1), text, fill=(30, 30, 30), font=font)
-draw.text((text_x, text_y), text, fill=(180, 180, 180), font=font)
-
-img.save('${output_path}')
-print("Background image created with PIL")
-EOF
-    else
-        # Fallback: create a simple gray background using sips
-        log_warn "PIL not available, creating simple background"
-
-        # Create a simple solid color PNG using convert if available
-        if command -v convert &>/dev/null; then
-            convert -size ${width}x${height} xc:'#2d3441' \
-                -gravity south -fill '#b4b4b4' -pointsize 16 \
-                -annotate +0+30 "Drag TalkyMcTalkface to Applications to install" \
-                "${output_path}"
-        else
-            # Last resort: use Python with basic image creation
-            python3 << EOF
-# Simple PPM creation without PIL
-width, height = ${width}, ${height}
-with open('${temp_png}', 'w') as f:
-    f.write(f'P3\n{width} {height}\n255\n')
-    for y in range(height):
-        for x in range(width):
-            r = int(45 + (y / height) * 15)
-            g = int(52 + (y / height) * 18)
-            b = int(65 + (y / height) * 25)
-            f.write(f'{r} {g} {b}\n')
-EOF
-            # Convert PPM to PNG using sips
-            sips -s format png "${temp_png}" --out "${output_path}" 2>/dev/null || {
-                log_warn "Could not create background image, DMG will have no background"
-                return 1
-            }
-        fi
-    fi
-
-    log_info "Background image created: ${output_path}"
 }
 
 # -------------------------------------------------------------------
@@ -207,20 +111,9 @@ log_info "Output: ${OUTPUT_DMG}"
 echo ""
 
 # -------------------------------------------------------------------
-# Step 1: Create background image if not exists
+# Step 1: Create temporary DMG structure
 # -------------------------------------------------------------------
-if [[ ! -f "${DMG_BACKGROUND}" ]]; then
-    log_info "Step 1: Creating background image..."
-    create_background_image "${DMG_BACKGROUND}" "${DMG_WINDOW_WIDTH}" "${DMG_WINDOW_HEIGHT}" || true
-else
-    log_info "Step 1: Using existing background image: ${DMG_BACKGROUND}"
-fi
-echo ""
-
-# -------------------------------------------------------------------
-# Step 2: Create temporary DMG structure
-# -------------------------------------------------------------------
-log_info "Step 2: Creating DMG structure..."
+log_info "Step 1: Creating DMG structure..."
 
 TEMP_DIR=$(mktemp -d)
 DMG_TEMP="${TEMP_DIR}/dmg_contents"
@@ -234,18 +127,12 @@ cp -R "${APP_PATH}" "${DMG_TEMP}/"
 log_info "Creating Applications alias..."
 ln -s /Applications "${DMG_TEMP}/Applications"
 
-# Copy background image if exists
-if [[ -f "${DMG_BACKGROUND}" ]]; then
-    mkdir -p "${DMG_TEMP}/.background"
-    cp "${DMG_BACKGROUND}" "${DMG_TEMP}/.background/background.png"
-fi
-
 echo ""
 
 # -------------------------------------------------------------------
-# Step 3: Create temporary read-write DMG
+# Step 2: Create temporary read-write DMG
 # -------------------------------------------------------------------
-log_info "Step 3: Creating temporary DMG..."
+log_info "Step 2: Creating temporary DMG..."
 
 TEMP_DMG="${TEMP_DIR}/${DMG_VOLUME_NAME}_temp.dmg"
 
@@ -266,9 +153,9 @@ hdiutil create \
 echo ""
 
 # -------------------------------------------------------------------
-# Step 4: Mount and customize DMG appearance
+# Step 3: Mount and customize DMG appearance
 # -------------------------------------------------------------------
-log_info "Step 4: Customizing DMG appearance..."
+log_info "Step 3: Customizing DMG appearance..."
 
 # Mount the DMG
 MOUNT_POINT="/Volumes/${DMG_VOLUME_NAME}"
@@ -283,7 +170,7 @@ hdiutil attach "${TEMP_DMG}" -mountpoint "${MOUNT_POINT}" -nobrowse
 # Wait for mount
 sleep 2
 
-# Set background and icon positions using AppleScript
+# Set icon positions using AppleScript
 log_info "Setting window appearance..."
 
 osascript << EOF
@@ -298,11 +185,6 @@ tell application "Finder"
         set theViewOptions to icon view options of container window
         set arrangement of theViewOptions to not arranged
         set icon size of theViewOptions to ${DMG_ICON_SIZE}
-
-        -- Set background if available
-        try
-            set background picture of theViewOptions to file ".background:background.png"
-        end try
 
         -- Position icons
         set position of item "${APP_NAME}.app" of container window to {${DMG_APP_X}, ${DMG_APP_Y}}
@@ -332,9 +214,9 @@ hdiutil detach "${MOUNT_POINT}"
 echo ""
 
 # -------------------------------------------------------------------
-# Step 5: Convert to compressed read-only DMG
+# Step 4: Convert to compressed read-only DMG
 # -------------------------------------------------------------------
-log_info "Step 5: Creating final compressed DMG..."
+log_info "Step 4: Creating final compressed DMG..."
 
 hdiutil convert "${TEMP_DMG}" \
     -format UDZO \
@@ -344,9 +226,9 @@ hdiutil convert "${TEMP_DMG}" \
 echo ""
 
 # -------------------------------------------------------------------
-# Step 6: Sign the DMG (optional but recommended)
+# Step 5: Sign the DMG
 # -------------------------------------------------------------------
-log_info "Step 6: Signing DMG..."
+log_info "Step 5: Signing DMG..."
 
 # Discover signing identity if not provided
 if [[ -z "${SIGNING_IDENTITY}" ]]; then
