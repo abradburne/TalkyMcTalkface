@@ -7,7 +7,6 @@ A macOS menu bar app for text-to-speech generation using [Chatterbox TurboTTS](h
 - **Menu Bar Integration** - Lives in your menu bar for quick access
 - **Voice Cloning** - Clone any voice from a short audio sample
 - **Job Queue** - Queue multiple TTS jobs and track their progress
-- **Global Hotkey** - Trigger TTS from anywhere with a keyboard shortcut
 - **Clipboard Support** - Automatically reads text from clipboard
 - **Local Processing** - All processing happens on your machine, no cloud required
 - **REST API** - Control via localhost API for automation and scripting
@@ -25,7 +24,7 @@ A macOS menu bar app for text-to-speech generation using [Chatterbox TurboTTS](h
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/TalkyMcTalkface.git
+   git clone https://github.com/abradburne/TalkyMcTalkface.git
    cd TalkyMcTalkface
    ```
 
@@ -75,13 +74,6 @@ Voice files should be:
 - Named descriptively (e.g., `Morgan_Freeman.wav`)
 
 The voice picker refreshes automatically when you add new files.
-
-### Global Hotkey
-
-Press `Cmd+Shift+T` (configurable) to:
-1. Read text from clipboard
-2. Generate speech with default voice
-3. Play the audio automatically
 
 ### REST API
 
