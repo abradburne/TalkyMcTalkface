@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# talkie - Command-line TTS using TalkyMcTalkface
+#
+# Usage:
+#   talkie "Hello world"
+#   talkie -v jerry-seinfeld "Hello world"
+#   echo "Hello" | talkie
+#   talkie --voices   # list available voices
+#
+
+SERVER="http://127.0.0.1:5111"
+VOICE=""
+TEXT=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -v|--voice)
+            VOICE="$2"
+            shift 2
+            ;;
+        --voices)
+            curl -s "$SERVER/voices" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for v in data.get('voices', []):
+    print(f\"  {v['id']}: {v['name']}\")
+" 2>/dev/null || echo "Error: TalkyMcTalkface server not running"
+            exit 0
+            ;;
+        -h|--help)
+            echo "Usage: talkie [OPTIONS] TEXT"
+            echo ""
+            echo "Options:"
+            echo "  -v, --voice ID   Use specific voice"
+            echo "  --voices         List available voices"
+            echo "  -h, --help       Show this help"
+            echo ""
+            echo "Examples:"
+            echo "  talkie \"Hello world\""
+            echo "  talkie -v jerry-seinfeld \"Hello world\""
+            echo "  echo \"Hello\" | talkie"
+            exit 0
+            ;;
+        *)
+            TEXT="$1"
+            shift
+            ;;
+    esac
+done
+
+# Read from stdin if no text provided
+if [[ -z "$TEXT" ]]; then
+    if [[ -t 0 ]]; then
+        echo "Error: No text provided"
+        echo "Usage: talkie \"Your text here\""
+        exit 1
+    fi
+    TEXT=$(cat)
+fi
+
+# Check server is running
+if ! curl -s "$SERVER/health" > /dev/null 2>&1; then
+    echo "Error: TalkyMcTalkface server not running"
+    echo "Start the TalkyMcTalkface app first"
+    exit 1
+fi
+
+# Build request body
+if [[ -n "$VOICE" ]]; then
+    BODY=$(printf '{"text": %s, "voice_id": "%s"}' "$(echo "$TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')" "$VOICE")
+else
+    BODY=$(printf '{"text": %s}' "$(echo "$TEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')")
+fi
+
+# Create job
+RESPONSE=$(curl -s -X POST "$SERVER/jobs" \
+    -H "Content-Type: application/json" \
+    -d "$BODY")
+
+JOB_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+
+if [[ -z "$JOB_ID" ]]; then
+    echo "Error: Failed to create job"
+    exit 1
+fi
+
+# Poll for completion
+echo -n "Generating..."
+while true; do
+    STATUS=$(curl -s "$SERVER/jobs/$JOB_ID" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+
+    case "$STATUS" in
+        completed)
+            echo " done!"
+            break
+            ;;
+        failed)
+            echo " failed!"
+            exit 1
+            ;;
+        *)
+            echo -n "."
+            sleep 0.5
+            ;;
+    esac
+done
+
+# Download and play audio
+TMPFILE=$(mktemp /tmp/talkie.XXXXXX.wav)
+curl -s "$SERVER/jobs/$JOB_ID/audio" -o "$TMPFILE"
+
+# Play audio
+afplay "$TMPFILE"
+
+# Cleanup
+rm -f "$TMPFILE"

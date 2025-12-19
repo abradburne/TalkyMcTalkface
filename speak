@@ -1,0 +1,67 @@
+#!/bin/bash
+# Chatterbox TTS CLI - sends text to the running menubar app
+# Usage:
+#   speak "text"                    - Speak with current voice
+#   speak --voice jerry "text"      - Speak with specific voice
+#   speak --voices                  - List available voices
+#   speak --set-voice jerry         - Set default voice
+
+API_URL="http://127.0.0.1:5111"
+
+# Check if app is running
+check_running() {
+    if ! curl -s "$API_URL/health" > /dev/null 2>&1; then
+        echo "Error: Chatterbox app is not running."
+        echo "Start it with: .venv/bin/python chatterbox_app.py"
+        exit 1
+    fi
+}
+
+# List voices
+if [ "$1" = "--voices" ] || [ "$1" = "-v" ]; then
+    check_running
+    curl -s "$API_URL/voices" | python3 -c "import sys,json; voices=json.load(sys.stdin)['voices']; print('Available voices:'); [print(f'  - {v}') for v in voices]"
+    exit 0
+fi
+
+# Set default voice
+if [ "$1" = "--set-voice" ] || [ "$1" = "-s" ]; then
+    check_running
+    VOICE="${2:-default}"
+    curl -s -X POST "$API_URL/voice" \
+        -H "Content-Type: application/json" \
+        -d "{\"voice\": \"$VOICE\"}" | python3 -c "import sys,json; r=json.load(sys.stdin); print(f'Voice set to: {r.get(\"voice\", r.get(\"error\", \"unknown\"))}')"
+    exit 0
+fi
+
+# Parse voice flag
+VOICE=""
+if [ "$1" = "--voice" ] || [ "$1" = "-V" ]; then
+    VOICE="$2"
+    shift 2
+fi
+
+# Check for text
+if [ $# -eq 0 ]; then
+    echo "Usage:"
+    echo "  speak \"text\"                  - Speak with current voice"
+    echo "  speak --voice NAME \"text\"     - Speak with specific voice"
+    echo "  speak --voices                - List available voices"
+    echo "  speak --set-voice NAME        - Set default voice"
+    exit 1
+fi
+
+TEXT="$*"
+check_running
+
+# Build JSON payload
+if [ -n "$VOICE" ]; then
+    JSON="{\"text\": \"$TEXT\", \"voice\": \"$VOICE\"}"
+else
+    JSON="{\"text\": \"$TEXT\"}"
+fi
+
+# Send request
+curl -s -X POST "$API_URL/speak" \
+    -H "Content-Type: application/json" \
+    -d "$JSON" | python3 -c "import sys,json; r=json.load(sys.stdin); print('Speaking:', r.get('text', r.get('error', 'unknown')))"

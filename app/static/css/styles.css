@@ -1,0 +1,181 @@
+/* TalkyMcTalkface - macOS-inspired styles */
+
+/* Smooth transitions for interactive elements */
+button,
+select,
+textarea,
+a {
+  transition: all 150ms ease-in-out;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Audio player styling */
+audio {
+  border-radius: 8px;
+}
+
+audio::-webkit-media-controls-panel {
+  background: #f9fafb;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Job list item styles */
+.job-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #f9fafb;
+  margin-bottom: 8px;
+  transition: background 150ms ease-in-out;
+}
+
+.job-item:hover {
+  background: #f3f4f6;
+}
+
+.job-item:last-child {
+  margin-bottom: 0;
+}
+
+.job-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.job-item-text {
+  font-size: 14px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.job-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.job-item-voice {
+  color: #6b7280;
+}
+
+.job-item-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.job-item-status.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.job-item-status.processing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.job-item-status.completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.job-item-status.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.job-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.job-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 150ms ease-in-out;
+}
+
+.job-action-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.job-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Frosted glass backdrop filter support */
+@supports (backdrop-filter: blur(20px)) {
+  .backdrop-blur-xl {
+    backdrop-filter: blur(20px);
+  }
+}
+
+/* Fallback for browsers without backdrop-filter */
+@supports not (backdrop-filter: blur(20px)) {
+  header {
+    background: rgba(255, 255, 255, 0.95) !important;
+  }
+}

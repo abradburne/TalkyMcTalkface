@@ -1,0 +1,60 @@
+# Requirements for PyInstaller bundling
+# This includes all dependencies needed to create a standalone executable
+#
+# Install with:
+#   pip install -r requirements-bundle.txt
+#
+# Then build with:
+#   ./scripts/build_python_backend.sh
+
+# PyInstaller for bundling
+pyinstaller>=6.0.0
+
+# FastAPI Server (from requirements.txt)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+
+# Database (from requirements.txt)
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite>=0.19.0
+
+# HTTP Client (for health checks and API calls)
+httpx>=0.25.0
+
+# TTS Dependencies (previously noted as "already installed")
+# PyTorch with MPS support for Apple Silicon
+# Install torch first:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Or for Apple Silicon with MPS:
+#   pip install torch torchaudio
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Chatterbox TTS
+# Note: Install from GitHub or PyPI depending on availability
+# pip install git+https://github.com/resemble-ai/chatterbox.git
+chatterbox
+
+# Perth watermarker (required by Chatterbox)
+perth
+
+# Transformers and friends (Chatterbox dependencies)
+transformers>=4.30.0
+tokenizers>=0.13.0
+safetensors>=0.3.0
+huggingface_hub>=0.16.0
+
+# Audio processing
+soundfile>=0.12.0
+scipy>=1.10.0
+numpy>=1.24.0
+
+# Async support
+anyio>=3.7.0
+
+# File handling
+filelock>=3.12.0
+fsspec>=2023.6.0
+regex>=2023.6.3
+tqdm>=4.65.0

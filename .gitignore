@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Audio files
+output.wav
+test.wav
+/audio/
+/prompts/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace
+!*.xcodeproj/project.xcworkspace/
+
+# Claude Code
+.claude/
+
+# Agent OS (local development tooling)
+/agent-os/
+
+# Application data (created at runtime)
+*.db
