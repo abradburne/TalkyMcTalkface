@@ -103,8 +103,8 @@ Install the CLI for terminal usage:
 Click "Install CLI Tool"
 
 # Then use from terminal
-talkie "Hello from the command line"
-talkie -v Morgan_Freeman "I can do any voice"
+talky "Hello from the command line"
+talky -v Morgan_Freeman "I can do any voice"
 ```
 
 ## Project Structure

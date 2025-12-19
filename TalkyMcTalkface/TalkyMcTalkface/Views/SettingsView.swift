@@ -158,7 +158,7 @@ struct SettingsView: View {
                 .font(.subheadline)
                 .fontWeight(.semibold)
 
-            Text("Install 'talkie' command for terminal usage")
+            Text("Install 'talky' command for terminal usage")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

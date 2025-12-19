@@ -1,7 +1,7 @@
 import Foundation
 import AppKit
 
-/// Service for installing the 'talkie' command-line tool
+/// Service for installing the 'talky' command-line tool
 @MainActor
 class CLIInstallService: ObservableObject {
     /// Installation status
@@ -13,7 +13,7 @@ class CLIInstallService: ObservableObject {
     }
 
     @Published var status: InstallStatus = .checking
-    @Published var installPath: String = "/usr/local/bin/talkie"
+    @Published var installPath: String = "/usr/local/bin/talky"
     @Published var lastError: String?
 
     private let fileManager = FileManager.default
@@ -22,13 +22,13 @@ class CLIInstallService: ObservableObject {
     private let cliScript = """
     #!/bin/bash
     #
-    # talkie - Command-line TTS using TalkyMcTalkface
+    # talky - Command-line TTS using TalkyMcTalkface
     #
     # Usage:
-    #   talkie "Hello world"
-    #   talkie -v jerry-seinfeld "Hello world"
-    #   echo "Hello" | talkie
-    #   talkie --voices   # list available voices
+    #   talky "Hello world"
+    #   talky -v jerry-seinfeld "Hello world"
+    #   echo "Hello" | talky
+    #   talky --voices   # list available voices
     #
 
     SERVER="http://127.0.0.1:5111"
@@ -58,7 +58,7 @@ class CLIInstallService: ObservableObject {
                 exit 0
                 ;;
             -h|--help)
-                echo "Usage: talkie [OPTIONS] TEXT"
+                echo "Usage: talky [OPTIONS] TEXT"
                 echo ""
                 echo "Options:"
                 echo "  -v, --voice ID   Use specific voice"
@@ -67,10 +67,10 @@ class CLIInstallService: ObservableObject {
                 echo "  -h, --help       Show this help"
                 echo ""
                 echo "Examples:"
-                echo "  talkie \\"Hello world\\""
-                echo "  talkie -v jerry-seinfeld \\"Hello world\\""
-                echo "  talkie -q \\"Queue this\\"    # non-blocking"
-                echo "  echo \\"Hello\\" | talkie"
+                echo "  talky \\"Hello world\\""
+                echo "  talky -v jerry-seinfeld \\"Hello world\\""
+                echo "  talky -q \\"Queue this\\"    # non-blocking"
+                echo "  echo \\"Hello\\" | talky"
                 exit 0
                 ;;
             *)
@@ -84,7 +84,7 @@ class CLIInstallService: ObservableObject {
     if [[ -z "$TEXT" ]]; then
         if [[ -t 0 ]]; then
             echo "Error: No text provided"
-            echo "Usage: talkie \\"Your text here\\""
+            echo "Usage: talky \\"Your text here\\""
             exit 1
         fi
         TEXT=$(cat)
@@ -144,7 +144,7 @@ class CLIInstallService: ObservableObject {
     done
 
     # Download and play audio
-    TMPFILE=$(mktemp /tmp/talkie.XXXXXX.wav)
+    TMPFILE=$(mktemp /tmp/talky.XXXXXX.wav)
     curl -s "$SERVER/jobs/$JOB_ID/audio" -o "$TMPFILE"
 
     # Play audio
@@ -180,7 +180,7 @@ class CLIInstallService: ObservableObject {
         lastError = nil
 
         // Write script to temp file first
-        let tempPath = NSTemporaryDirectory() + "talkie_install"
+        let tempPath = NSTemporaryDirectory() + "talky_install"
         do {
             try cliScript.write(toFile: tempPath, atomically: true, encoding: .utf8)
             try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tempPath)
@@ -284,7 +284,7 @@ class CLIInstallService: ObservableObject {
         let script = """
         tell application "Terminal"
             activate
-            do script "talkie --help"
+            do script "talky --help"
         end tell
         """
 
