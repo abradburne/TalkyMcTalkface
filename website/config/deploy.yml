@@ -1,0 +1,25 @@
+# Kamal 2 deployment config for TalkyMcTalkface website
+
+service: talky-web
+
+image: talky-web
+
+servers:
+  web:
+    hosts:
+      - 5.78.152.128
+
+registry:
+  server: localhost:5000
+
+builder:
+  arch: amd64
+  local: true
+
+proxy:
+  ssl: true
+  host: talky.xenocode.co.jp
+  app_port: 80
+
+ssh:
+  user: root

@@ -44,3 +44,13 @@ DerivedData/
 
 # Application data (created at runtime)
 *.db
+
+# Local-only files (not for OSS)
+LOCAL_BUILD_NOTES.md
+talky.png
+
+# Kamal secrets
+.kamal/secrets
+
+# Playwright MCP
+.playwright-mcp/

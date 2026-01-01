@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TalkyMcTalkface - Local Voice Cloning for Mac</title>
+  <meta name="description" content="Clone any voice locally on your Mac. No cloud, no subscription. Open source text-to-speech with CLI and REST API.">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="images/app-icon.png" type="image/png">
+</head>
+<body>
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="site-logo">
+        <img src="images/app-icon.png" alt="">
+        <span>TalkyMcTalkface</span>
+      </a>
+      <nav class="site-nav">
+        <a href="voices.html">Voices</a>
+        <a href="https://github.com/abradburne/TalkyMcTalkface" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <h1 class="hero-title">> TalkyMcTalkface<span class="cursor">_</span></h1>
+        <p class="hero-tagline">Local voice cloning for your Mac.</p>
+        <p class="hero-subtitle">Clone any voice. No cloud. No subscription.</p>
+
+        <div class="hero-buttons">
+          <a href="https://github.com/abradburne/TalkyMcTalkface/releases" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            Download DMG
+          </a>
+          <a href="voices.html" class="btn btn-secondary">Browse Voices</a>
+        </div>
+
+        <div class="cli-preview">
+          <div class="line"><span class="prompt">$</span> <span class="cmd">talky "Hello world" --voice morgan</span></div>
+          <div class="line"><span class="output">Generating speech... done.</span></div>
+          <div class="line"><span class="output">Saved to: hello-world.wav</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Demos Section -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">Hear it in action</h2>
+
+        <div class="voice-cards">
+          <!-- Voice 1 -->
+          <div class="voice-card" data-audio="audio/demos/narrator-male.wav">
+            <div class="voice-card-header">
+              <button class="play-btn" aria-label="Play">
+                <svg class="play-icon" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+                <svg class="pause-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+              <span class="voice-name">Morgan</span>
+            </div>
+            <p class="voice-desc">Deep male narrator voice</p>
+            <div class="voice-progress"><div class="voice-progress-bar"></div></div>
+            <audio preload="none">
+              <source src="audio/demos/narrator-male.wav" type="audio/wav">
+            </audio>
+          </div>
+
+          <!-- Voice 2 -->
+          <div class="voice-card" data-audio="audio/demos/narrator-female.wav">
+            <div class="voice-card-header">
+              <button class="play-btn" aria-label="Play">
+                <svg class="play-icon" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+                <svg class="pause-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+              <span class="voice-name">Sarah</span>
+            </div>
+            <p class="voice-desc">Warm female narrator</p>
+            <div class="voice-progress"><div class="voice-progress-bar"></div></div>
+            <audio preload="none">
+              <source src="audio/demos/narrator-female.wav" type="audio/wav">
+            </audio>
+          </div>
+
+          <!-- Voice 3 -->
+          <div class="voice-card" data-audio="audio/demos/british-narrator.wav">
+            <div class="voice-card-header">
+              <button class="play-btn" aria-label="Play">
+                <svg class="play-icon" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+                <svg class="pause-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+              <span class="voice-name">James</span>
+            </div>
+            <p class="voice-desc">British audiobook narrator</p>
+            <div class="voice-progress"><div class="voice-progress-bar"></div></div>
+            <audio preload="none">
+              <source src="audio/demos/british-narrator.wav" type="audio/wav">
+            </audio>
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+          Generated locally using voices from the Voice Library.
+        </p>
+        <a href="voices.html" class="section-link">Browse all voices →</a>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">Why TalkyMcTalkface</h2>
+
+        <ul class="features-list">
+          <li>
+            <span class="feature-name">100% local</span>
+            <span class="feature-desc">No data leaves your Mac</span>
+          </li>
+          <li>
+            <span class="feature-name">No subscription</span>
+            <span class="feature-desc">Download once, use forever</span>
+          </li>
+          <li>
+            <span class="feature-name">CLI included</span>
+            <span class="feature-desc">Automate with the <code>talky</code> command</span>
+          </li>
+          <li>
+            <span class="feature-name">REST API</span>
+            <span class="feature-desc">Integrate with your scripts</span>
+          </li>
+          <li>
+            <span class="feature-name">Open source</span>
+            <span class="feature-desc">MIT licensed, fork it</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CLI Section -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">Command line ready</h2>
+
+        <div class="terminal-box">
+          <div class="line"><span class="prompt">$</span> <span class="cmd">talky "Your text here" --voice morgan</span></div>
+          <div class="line"><span class="prompt">$</span> <span class="cmd">talky --list-voices</span></div>
+          <div class="line"><span class="prompt">$</span> <span class="cmd">talky --help</span></div>
+        </div>
+
+        <p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+          Install the CLI from the app's settings menu.
+        </p>
+      </div>
+    </section>
+
+    <!-- Requirements Section -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">Requirements</h2>
+
+        <div class="requirements-box">
+          <ul class="requirements-list">
+            <li>macOS 14.0 (Sonoma) or later</li>
+            <li>Apple Silicon recommended</li>
+            <li>~4GB disk space for TTS model</li>
+            <li>2-4GB RAM during inference</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <p>Built with <a href="https://github.com/resemble-ai/chatterbox" target="_blank" rel="noopener">Chatterbox TurboTTS</a> by Resemble AI.</p>
+      <div class="footer-links">
+        <a href="https://github.com/abradburne/TalkyMcTalkface" target="_blank" rel="noopener">GitHub</a>
+        <a href="voices.html">Voices</a>
+        <span>MIT License</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Voice card audio player
+    document.addEventListener('DOMContentLoaded', function() {
+      const cards = document.querySelectorAll('.voice-card');
+      let currentlyPlaying = null;
+
+      cards.forEach(card => {
+        const audio = card.querySelector('audio');
+        const progressBar = card.querySelector('.voice-progress-bar');
+
+        card.addEventListener('click', function(e) {
+          // Stop any currently playing audio
+          if (currentlyPlaying && currentlyPlaying !== audio) {
+            currentlyPlaying.pause();
+            currentlyPlaying.currentTime = 0;
+            currentlyPlaying.closest('.voice-card').classList.remove('playing');
+            currentlyPlaying.closest('.voice-card').querySelector('.voice-progress-bar').style.width = '0%';
+          }
+
+          if (audio.paused) {
+            audio.play();
+            card.classList.add('playing');
+            currentlyPlaying = audio;
+          } else {
+            audio.pause();
+            card.classList.remove('playing');
+            currentlyPlaying = null;
+          }
+        });
+
+        audio.addEventListener('timeupdate', function() {
+          const progress = (audio.currentTime / audio.duration) * 100;
+          progressBar.style.width = progress + '%';
+        });
+
+        audio.addEventListener('ended', function() {
+          card.classList.remove('playing');
+          progressBar.style.width = '0%';
+          currentlyPlaying = null;
+        });
+      });
+    });
+  </script>
+</body>
+</html>
