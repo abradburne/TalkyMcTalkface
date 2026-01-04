@@ -2,7 +2,7 @@
 """
 TalkyMcTalkface FastAPI Server
 
-A job-based TTS generation server using Chatterbox TurboTTS.
+A job-based TTS generation server using MLX Chatterbox.
 Provides async API endpoints for voice listing, job management, and audio retrieval.
 """
 # CRITICAL: Must be first for PyInstaller multiprocessing support
@@ -13,17 +13,8 @@ if __name__ == '__main__':
 
 import os
 
-# Disable torch multiprocessing workers
-os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['MKL_NUM_THREADS'] = '1'
-
 # Suppress tokenizers parallelism warning
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-
-# CRITICAL: Patch Perth watermarker for macOS compatibility
-# Must be done before ANY Chatterbox imports
-import perth
-perth.PerthImplicitWatermarker = perth.DummyWatermarker
 
 from contextlib import asynccontextmanager
 
@@ -61,26 +52,33 @@ async def lifespan(app: FastAPI):
     print('Initializing database...')
     await init_db()
 
-    # Try to load TTS model (will succeed if model is already cached)
-    # Task 3.2: If model not cached, health endpoint will show model_loaded=false
+    # Check TTS model status - but DON'T block startup for loading
+    # Model loading is done in background so health endpoint is available immediately
     print('Checking for TTS model...')
     tts_service = get_tts_service()
 
-    try:
-        tts_service.load_model()
-        print('Model loaded!')
+    # Start background thread to download/load model (doesn't block startup)
+    import threading
+    def load_model_background():
+        try:
+            if tts_service.is_model_cached():
+                print('Background: Model found in cache, loading...')
+            else:
+                print('Background: Downloading model (~1.5 GB)... This may take several minutes.')
 
-        # Scan voices
-        voices = tts_service.scan_voices()
-        if voices:
-            print(f'Available voices: {", ".join(voices.keys())}')
-        else:
-            print('No voices found. Add .wav files to ~/Library/Application Support/TalkyMcTalkface/voices/')
-    except Exception as e:
-        # Model not available yet - this is expected on first launch
-        # User will need to trigger download via /model/download endpoint
-        print(f'Model not loaded (first launch or download required): {e}')
-        print('Use /model/download endpoint to download the model')
+            tts_service.load_model(local_only=False)
+            print('Background: Model loaded!')
+            voices = tts_service.scan_voices()
+            if voices:
+                print(f'Background: Available voices: {", ".join(voices.keys())}')
+            else:
+                print('Background: No voices found.')
+        except Exception as e:
+            print(f'Background: Error loading model: {e}')
+
+    print('Starting model download/load in background...')
+    load_thread = threading.Thread(target=load_model_background, daemon=True)
+    load_thread.start()
 
     # Start job processor
     print('Starting job processor...')
@@ -111,7 +109,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title=APP_NAME,
-    description='A job-based TTS generation server using Chatterbox TurboTTS.',
+    description='A job-based TTS generation server using MLX Chatterbox.',
     version=APP_VERSION,
     lifespan=lifespan,
 )
@@ -130,6 +128,12 @@ app.mount('/static', StaticFiles(directory=str(STATIC_DIR)), name='static')
 async def root():
     """Serve the web UI."""
     return FileResponse(str(TEMPLATES_DIR / 'index.html'))
+
+
+@app.get('/usage', include_in_schema=False)
+async def usage():
+    """Serve the usage documentation page."""
+    return FileResponse(str(TEMPLATES_DIR / 'usage.html'))
 
 
 if __name__ == '__main__':

@@ -16,6 +16,8 @@ class HealthResponse(BaseModel):
     """Health check response schema."""
     status: str
     model_loaded: bool
+    model_loading: bool  # True while model is loading in background
+    model_cached: bool   # True if model is cached locally
     available_voices: List[str]
     version: str
 
@@ -31,6 +33,8 @@ async def health_check(tts: TTSService = Depends(get_tts_service)) -> HealthResp
     return HealthResponse(
         status='ok',
         model_loaded=tts.is_loaded,
+        model_loading=tts.is_loading,
+        model_cached=tts.is_model_cached(),
         available_voices=tts.get_voice_ids(),
         version=APP_VERSION,
     )

@@ -10,7 +10,7 @@ struct MenuBarAppTests {
     /// Test that status icon displays correct system image for each state
     @Test("Status icons use correct SF Symbols for each state")
     func testStatusIconNames() {
-        #expect(AppStatus.ready.iconName == "checkmark.circle.fill")
+        #expect(AppStatus.ready.iconName == "waveform.circle.fill")
         #expect(AppStatus.loading.iconName == "arrow.clockwise.circle.fill")
         #expect(AppStatus.error.iconName == "exclamationmark.triangle.fill")
         #expect(AppStatus.downloadRequired.iconName == "arrow.down.circle.fill")

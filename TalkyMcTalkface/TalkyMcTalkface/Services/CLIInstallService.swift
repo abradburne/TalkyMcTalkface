@@ -279,18 +279,10 @@ class CLIInstallService: ObservableObject {
         }
     }
 
-    /// Open terminal with usage example
+    /// Open usage documentation in browser
     func showUsage() {
-        let script = """
-        tell application "Terminal"
-            activate
-            do script "talky --help"
-        end tell
-        """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
+        if let url = URL(string: "http://127.0.0.1:5111/usage") {
+            NSWorkspace.shared.open(url)
         }
     }
 }

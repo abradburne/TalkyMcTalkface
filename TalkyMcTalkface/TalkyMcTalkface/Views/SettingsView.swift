@@ -24,10 +24,18 @@ struct SettingsView: View {
     @StateObject private var cliService = CLIInstallService()
     @State private var launchAtLoginEnabled: Bool
 
+    // HuggingFace token management
+    @State private var hfTokenInput: String = ""
+    @State private var hfTokenSaved: Bool = false
+    @State private var hfTokenError: String?
+    @State private var isRestartingBackend: Bool = false
+
     init(appState: AppState) {
         self.appState = appState
         // Initialize with current setting
         _launchAtLoginEnabled = State(initialValue: appState.settings.launchAtLogin)
+        // Initialize token field (show placeholder if token exists)
+        _hfTokenInput = State(initialValue: "")
     }
 
     var body: some View {
@@ -45,6 +53,11 @@ struct SettingsView: View {
 
                 // Model Management Section
                 modelManagementSection
+
+                Divider()
+
+                // HuggingFace Account Section
+                huggingFaceSection
 
                 Divider()
 
@@ -329,6 +342,123 @@ struct SettingsView: View {
             return "Not downloaded"
         default:
             return "Unknown"
+        }
+    }
+
+    // MARK: - HuggingFace Account Section
+
+    private var huggingFaceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HuggingFace Account")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Text("Some AI models require a free HuggingFace account to download. If you see an authentication error, enter your API token below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button("Get a free token") {
+                if let url = URL(string: "https://huggingface.co/settings/tokens") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+
+            HStack {
+                if KeychainService.shared.hasHuggingFaceToken() && hfTokenInput.isEmpty {
+                    // Show masked placeholder when token exists
+                    SecureField("Token saved", text: .constant(""))
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(true)
+                } else {
+                    SecureField("Paste your API token", text: $hfTokenInput)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: hfTokenInput) { _, _ in
+                            hfTokenSaved = false
+                            hfTokenError = nil
+                        }
+                }
+            }
+
+            HStack {
+                if KeychainService.shared.hasHuggingFaceToken() {
+                    Button("Clear Token") {
+                        clearHuggingFaceToken()
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(.red)
+                }
+
+                Spacer()
+
+                if isRestartingBackend {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Restarting...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !hfTokenInput.isEmpty {
+                    Button("Save Token") {
+                        saveHuggingFaceToken()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
+            if hfTokenSaved {
+                Label("Token saved securely in Keychain", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+            }
+
+            if let error = hfTokenError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func saveHuggingFaceToken() {
+        guard !hfTokenInput.isEmpty else { return }
+
+        do {
+            try KeychainService.shared.saveHuggingFaceToken(hfTokenInput)
+            hfTokenInput = ""
+            hfTokenSaved = true
+            hfTokenError = nil
+
+            // Hot reload: restart the backend to pick up the new token
+            restartBackendWithNewToken()
+        } catch {
+            hfTokenError = "Failed to save token: \(error.localizedDescription)"
+        }
+    }
+
+    private func clearHuggingFaceToken() {
+        do {
+            try KeychainService.shared.deleteHuggingFaceToken()
+            hfTokenInput = ""
+            hfTokenSaved = false
+            hfTokenError = nil
+
+            // Restart backend without the token
+            restartBackendWithNewToken()
+        } catch {
+            hfTokenError = "Failed to clear token: \(error.localizedDescription)"
+        }
+    }
+
+    private func restartBackendWithNewToken() {
+        isRestartingBackend = true
+        Task {
+            await appState.stopBackend()
+            await appState.startBackend()
+            await MainActor.run {
+                isRestartingBackend = false
+            }
         }
     }
 }

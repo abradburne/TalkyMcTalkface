@@ -5,12 +5,16 @@ import Combine
 struct HealthResponse: Codable {
     let status: String
     let modelLoaded: Bool
+    let modelLoading: Bool
+    let modelCached: Bool
     let availableVoices: [String]
     let version: String
 
     enum CodingKeys: String, CodingKey {
         case status
         case modelLoaded = "model_loaded"
+        case modelLoading = "model_loading"
+        case modelCached = "model_cached"
         case availableVoices = "available_voices"
         case version
     }
@@ -48,6 +52,9 @@ class SubprocessManager: ObservableObject {
     /// Callback for status updates
     var onStatusChange: ((AppStatus) -> Void)?
 
+    /// Callback for loading message updates
+    var onLoadingMessageChange: ((String) -> Void)?
+
     init() {}
 
     /// Cleanup resources - call this before releasing the manager
@@ -76,6 +83,8 @@ class SubprocessManager: ObservableObject {
             return
         }
 
+        let pid = process.processIdentifier
+
         // Send SIGTERM for graceful shutdown
         process.terminate()
 
@@ -83,8 +92,10 @@ class SubprocessManager: ObservableObject {
         let didTerminate = await waitForTermination(timeout: shutdownTimeout)
 
         if !didTerminate {
-            // Force kill if not responding
-            process.interrupt()
+            // Force kill with SIGKILL if not responding
+            // Kill the process group to catch child processes too
+            kill(-pid, SIGKILL)  // Negative pid kills the process group
+            kill(pid, SIGKILL)   // Also kill the main process directly
             // Give it a moment to actually die
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
         }
@@ -119,6 +130,7 @@ class SubprocessManager: ObservableObject {
     /// Launch the Python subprocess
     private func launchSubprocess() async {
         onStatusChange?(.loading)
+        onLoadingMessageChange?("Starting server...")
 
         guard let executablePath = findPythonExecutable() else {
             lastError = "Python executable not found in Resources"
@@ -144,6 +156,13 @@ class SubprocessManager: ObservableObject {
         environment["OPENBLAS_NUM_THREADS"] = "1"
         environment["VECLIB_MAXIMUM_THREADS"] = "1"
         environment["NUMEXPR_NUM_THREADS"] = "1"
+
+        // Pass HuggingFace token from Keychain if available
+        if let hfToken = KeychainService.shared.getHuggingFaceToken(), !hfToken.isEmpty {
+            environment["HF_TOKEN"] = hfToken
+            print("[SubprocessManager] HuggingFace token configured")
+        }
+
         process.environment = environment
 
         print("[SubprocessManager] Launching: \(executablePath.path)")
@@ -256,16 +275,34 @@ class SubprocessManager: ObservableObject {
 
     /// Wait for the server to become ready
     private func waitForServerReady() async {
-        let maxAttempts = 120 // 60 seconds total (500ms * 120) - model loading takes ~25-30s
+        let maxAttempts = 30 // 15 seconds total (500ms * 30) - just wait for server to respond
 
-        for _ in 1...maxAttempts {
+        for attempt in 1...maxAttempts {
             if let health = await checkHealth() {
+                // Server is responding - determine status based on model state
                 if health.modelLoaded {
+                    onLoadingMessageChange?("Ready!")
                     onStatusChange?(.ready)
+                } else if health.modelLoading {
+                    // Model is loading in background - show loading status
+                    onLoadingMessageChange?("Loading TTS model... (this takes ~30 seconds)")
+                    onStatusChange?(.loading)
+                } else if health.modelCached {
+                    // Cached but not loading yet - will start soon
+                    onLoadingMessageChange?("Preparing to load model...")
+                    onStatusChange?(.loading)
                 } else {
+                    // Not cached, not loading - needs download
                     onStatusChange?(.downloadRequired)
                 }
                 return
+            }
+
+            // Update message while waiting for server
+            if attempt <= 5 {
+                onLoadingMessageChange?("Starting server...")
+            } else {
+                onLoadingMessageChange?("Waiting for server to respond...")
             }
 
             // Wait 500ms before retry
@@ -300,6 +337,13 @@ class SubprocessManager: ObservableObject {
         if let health = await checkHealth() {
             if health.modelLoaded {
                 onStatusChange?(.ready)
+            } else if health.modelLoading {
+                onLoadingMessageChange?("Loading TTS model... (this takes ~30 seconds)")
+                onStatusChange?(.loading)
+            } else if health.modelCached {
+                // Cached but not loading - may be starting to load
+                onLoadingMessageChange?("Preparing to load model...")
+                onStatusChange?(.loading)
             } else {
                 onStatusChange?(.downloadRequired)
             }

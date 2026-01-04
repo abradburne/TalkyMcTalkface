@@ -14,13 +14,21 @@ A macOS menu bar app for text-to-speech generation using [Chatterbox TurboTTS](h
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Python 3.11+
-- Xcode 15+ (for building from source)
 - ~4GB disk space for the TTS model
 
 ## Installation
 
-### From Source
+### Download (Recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/abradburne/TalkyMcTalkface/releases):
+
+1. Download `TalkyMcTalkface.dmg`
+2. Open the DMG and drag TalkyMcTalkface to your Applications folder
+3. Launch from Applications (you may need to right-click → Open on first launch)
+
+### Building from Source
+
+Requires Python 3.11+ and Xcode 15+.
 
 1. **Clone the repository**
    ```bash

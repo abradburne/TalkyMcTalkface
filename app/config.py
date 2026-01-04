@@ -31,11 +31,11 @@ AUDIO_DIR = APP_SUPPORT_DIR / 'audio'
 # Voice prompts storage (user-managed voice library)
 VOICES_DIR = APP_SUPPORT_DIR / 'voices'
 
-# Model configuration
-MODEL_DEVICE = 'mps'  # Metal Performance Shaders for Apple Silicon
+# MLX Model configuration (Turbo = faster, 1-step diffusion)
+MLX_MODEL_REPO = 'mlx-community/chatterbox-turbo-6bit'
 
-# Clear GPU cache after each generation (reduces peak memory, slight overhead)
-MODEL_AGGRESSIVE_MEMORY = True
+# Chatterbox sample rate (fixed by model)
+TTS_SAMPLE_RATE = 24000
 
 
 def ensure_directories():

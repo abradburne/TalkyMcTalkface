@@ -13,7 +13,7 @@ enum AppStatus: String, Equatable {
     var iconName: String {
         switch self {
         case .ready:
-            return "checkmark.circle.fill"
+            return "waveform.circle.fill"
         case .loading:
             return "arrow.clockwise.circle.fill"
         case .error:
@@ -30,13 +30,13 @@ enum AppStatus: String, Equatable {
         case .ready:
             return "TalkyMcTalkface is ready to use."
         case .loading:
-            return "Starting up..."
+            return "Loading model... This takes about 30 seconds."
         case .error:
             return "An error occurred. Please try restarting."
         case .downloadRequired:
-            return "The TTS model needs to be downloaded before use."
+            return "First-time setup: Download the TTS model (~1.5 GB) to get started."
         case .downloading:
-            return "Downloading model..."
+            return "Downloading model... This may take several minutes."
         }
     }
 }
@@ -50,6 +50,7 @@ enum AppStatus: String, Equatable {
 class AppState: ObservableObject {
     @Published var status: AppStatus = .loading
     @Published var errorMessage: String?
+    @Published var loadingMessage: String = "Starting server..."
 
     // MARK: - Voice State (Task 4.2)
 
@@ -156,6 +157,12 @@ class AppState: ObservableObject {
                 if newStatus == .ready {
                     await self?.fetchVoices()
                 }
+            }
+        }
+
+        subprocessManager.onLoadingMessageChange = { [weak self] message in
+            Task { @MainActor in
+                self?.loadingMessage = message
             }
         }
     }

@@ -17,8 +17,8 @@
 # Requirements:
 #   - Python 3.11+
 #   - All dependencies from requirements.txt installed
-#   - PyTorch with MPS support (for Apple Silicon)
-#   - Chatterbox TTS and perth packages
+#   - MLX framework (for Apple Silicon)
+#   - mlx-audio-plus for Chatterbox TTS
 
 set -e
 
@@ -91,10 +91,9 @@ echo "Checking required packages..."
 REQUIRED_PACKAGES=(
     "fastapi"
     "uvicorn"
-    "torch"
-    "torchaudio"
-    "chatterbox"
-    "perth"
+    "mlx"
+    "mlx_audio"
+    "scipy"
 )
 
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
@@ -107,14 +106,18 @@ for pkg in "${REQUIRED_PACKAGES[@]}"; do
     fi
 done
 
-# Check for MPS support on Apple Silicon
+# Check for MLX support on Apple Silicon
 if [[ $(uname -m) == "arm64" ]]; then
-    echo "Checking MPS support..."
-    if python3 -c "import torch; exit(0 if torch.backends.mps.is_available() else 1)" 2>/dev/null; then
-        echo "  [OK] MPS (Metal Performance Shaders) available"
+    echo "Checking MLX support..."
+    if python3 -c "import mlx.core; print('MLX available')" 2>/dev/null; then
+        echo "  [OK] MLX framework available"
     else
-        echo -e "${YELLOW}  [WARNING] MPS not available - GPU acceleration may not work${NC}"
+        echo -e "${RED}  [ERROR] MLX not available - requires Apple Silicon${NC}"
+        exit 1
     fi
+else
+    echo -e "${RED}Error: MLX requires Apple Silicon (arm64)${NC}"
+    exit 1
 fi
 
 echo -e "${GREEN}Python environment verified.${NC}"

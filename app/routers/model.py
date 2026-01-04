@@ -1,8 +1,7 @@
 """
 Model management endpoints for download and status.
 
-Task 3.4: Backend endpoints for model download with progress tracking.
-The Chatterbox model is downloaded via HuggingFace/transformers library.
+The MLX Chatterbox model is downloaded via HuggingFace hub.
 """
 import asyncio
 import threading
@@ -39,6 +38,8 @@ _download_state = {
     'total_bytes': 0,
     'message': '',
     'lock': threading.Lock(),
+    'cancel_requested': False,
+    'download_thread': None,
 }
 
 
@@ -85,7 +86,7 @@ def _download_model_sync():
     try:
         _update_download_state(
             status='downloading',
-            progress=0.1,
+            progress=0.05,
             message='Initializing model download...',
         )
 
@@ -101,17 +102,43 @@ def _download_model_sync():
             )
             return
 
-        _update_download_state(
-            progress=0.2,
-            message='Downloading model files from HuggingFace...',
-        )
+        # Check for cancellation before expensive operations
+        if _download_state['cancel_requested']:
+            _update_download_state(
+                status='idle',
+                progress=0.0,
+                message='Download cancelled',
+            )
+            return
 
-        # Load model - this triggers the HuggingFace download
-        tts_service.load_model()
+        # Check if cached but not loaded
+        if tts_service.is_model_cached():
+            _update_download_state(
+                progress=0.8,
+                message='Model found in cache, loading...',
+            )
+        else:
+            _update_download_state(
+                progress=0.1,
+                message='Downloading model files from HuggingFace (~1.5 GB)... This may take several minutes.',
+            )
+
+        # Load model - this triggers the HuggingFace download if not cached
+        # Note: HuggingFace download cannot be interrupted mid-file
+        tts_service.load_model(local_only=False)
+
+        # Check for cancellation after download (before marking complete)
+        if _download_state['cancel_requested']:
+            _update_download_state(
+                status='idle',
+                progress=0.0,
+                message='Download cancelled (model files may be partially cached)',
+            )
+            return
 
         # Scan for voices after model loads
         _update_download_state(
-            progress=0.9,
+            progress=0.95,
             message='Scanning available voices...',
         )
         tts_service.scan_voices()
@@ -119,14 +146,50 @@ def _download_model_sync():
         _update_download_state(
             status='completed',
             progress=1.0,
-            message='Model download complete',
+            message='Model ready! You can now generate speech.',
         )
 
-    except Exception as e:
+    except PermissionError as e:
+        # Authentication error
         _update_download_state(
             status='error',
-            message=f'Download failed: {str(e)}',
+            message=str(e),
         )
+    except ConnectionError as e:
+        # Network error
+        _update_download_state(
+            status='error',
+            message=str(e),
+        )
+    except FileNotFoundError as e:
+        # Model not found (shouldn't happen in this path)
+        _update_download_state(
+            status='error',
+            message=str(e),
+        )
+    except Exception as e:
+        # Check for common HuggingFace errors
+        error_msg = str(e).lower()
+        if 'token' in error_msg or 'authentication' in error_msg or '401' in error_msg:
+            _update_download_state(
+                status='error',
+                message='HuggingFace authentication required. Set HF_TOKEN environment variable.',
+            )
+        elif 'connection' in error_msg or 'network' in error_msg:
+            _update_download_state(
+                status='error',
+                message=f'Network error: {e}. Check your internet connection.',
+            )
+        elif 'space' in error_msg or 'disk' in error_msg:
+            _update_download_state(
+                status='error',
+                message=f'Insufficient disk space. The model requires ~2GB free space.',
+            )
+        else:
+            _update_download_state(
+                status='error',
+                message=f'Download failed: {str(e)}',
+            )
 
 
 @router.get('/progress', response_model=ModelDownloadProgress)
@@ -143,6 +206,31 @@ async def get_download_progress() -> ModelDownloadProgress:
         downloaded_bytes=state['downloaded_bytes'],
         total_bytes=state['total_bytes'],
         message=state['message'],
+    )
+
+
+@router.post('/cancel', response_model=ModelDownloadResponse)
+async def cancel_model_download() -> ModelDownloadResponse:
+    """
+    Request cancellation of the current model download.
+
+    Note: The download may not stop immediately as HuggingFace downloads
+    cannot be interrupted mid-file. The cancellation will take effect
+    between file downloads.
+    """
+    state = _get_download_state()
+    if state['status'] != 'downloading':
+        return ModelDownloadResponse(
+            status='not_downloading',
+            message='No download in progress',
+        )
+
+    with _download_state['lock']:
+        _download_state['cancel_requested'] = True
+
+    return ModelDownloadResponse(
+        status='cancelling',
+        message='Cancellation requested. Download will stop shortly.',
     )
 
 
@@ -176,6 +264,10 @@ async def trigger_model_download() -> ModelDownloadResponse:
     # The actual size varies but this gives users a sense of progress
     estimated_size = 1_500_000_000  # ~1.5 GB estimate
 
+    # Reset state for new download
+    with _download_state['lock']:
+        _download_state['cancel_requested'] = False
+
     _update_download_state(
         status='downloading',
         progress=0.0,
@@ -188,6 +280,7 @@ async def trigger_model_download() -> ModelDownloadResponse:
     # We use a thread because model loading is CPU-bound and blocking
     download_thread = threading.Thread(target=_download_model_sync, daemon=True)
     download_thread.start()
+    _download_state['download_thread'] = download_thread
 
     return ModelDownloadResponse(
         status='started',
@@ -200,10 +293,31 @@ async def get_model_status() -> dict:
     """
     Get current model status.
 
-    Returns whether the model is loaded and ready for use.
+    Returns whether the model is loaded, cached, and ready for use.
     """
     tts_service = get_tts_service()
+    is_cached = tts_service.is_model_cached()
+    is_loaded = tts_service.is_loaded
+    download_state = _get_download_state()
+
     return {
-        'loaded': tts_service.is_loaded,
-        'voices': tts_service.get_voice_ids() if tts_service.is_loaded else [],
+        'loaded': is_loaded,
+        'cached': is_cached,
+        'download_required': not is_cached and not is_loaded,
+        'downloading': download_state['status'] == 'downloading',
+        'voices': tts_service.get_voice_ids() if is_loaded else [],
+        'message': _get_status_message(is_loaded, is_cached, download_state),
     }
+
+
+def _get_status_message(is_loaded: bool, is_cached: bool, download_state: dict) -> str:
+    """Generate a human-readable status message."""
+    if is_loaded:
+        return 'Model loaded and ready'
+    if download_state['status'] == 'downloading':
+        return download_state['message']
+    if download_state['status'] == 'error':
+        return f"Download error: {download_state['message']}"
+    if is_cached:
+        return 'Model cached but not loaded. Restart the server to load.'
+    return 'Model not downloaded. Click "Download Model" to get started (~1.5 GB).'

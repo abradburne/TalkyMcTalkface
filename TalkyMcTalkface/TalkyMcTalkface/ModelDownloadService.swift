@@ -46,19 +46,31 @@ enum ModelDownloadError: Error, LocalizedError {
     case invalidResponse
     case alreadyDownloading
     case backendNotRunning
+    case authenticationRequired
+    case insufficientDiskSpace
 
     var errorDescription: String? {
         switch self {
         case .downloadFailed(let message):
-            return "Download failed: \(message)"
+            if message.lowercased().contains("token") || message.lowercased().contains("authentication") {
+                return "HuggingFace authentication required. Set HF_TOKEN environment variable."
+            }
+            if message.lowercased().contains("space") || message.lowercased().contains("disk") {
+                return "Insufficient disk space. The model requires ~2GB free space."
+            }
+            return message
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
+            return "Network error: \(error.localizedDescription). Check your internet connection."
         case .invalidResponse:
             return "Invalid response from server"
         case .alreadyDownloading:
             return "Download already in progress"
         case .backendNotRunning:
             return "Backend server is not running"
+        case .authenticationRequired:
+            return "HuggingFace authentication required. Set HF_TOKEN environment variable."
+        case .insufficientDiskSpace:
+            return "Insufficient disk space. The model requires ~2GB free space."
         }
     }
 }
@@ -72,6 +84,7 @@ class ModelDownloadService: ObservableObject {
     static let serverPort = 5111
     static let downloadURL = URL(string: "http://\(serverHost):\(serverPort)/model/download")!
     static let progressURL = URL(string: "http://\(serverHost):\(serverPort)/model/progress")!
+    static let cancelURL = URL(string: "http://\(serverHost):\(serverPort)/model/cancel")!
 
     /// Progress polling interval in seconds
     private let progressPollInterval: TimeInterval = 0.5
@@ -142,7 +155,26 @@ class ModelDownloadService: ObservableObject {
         downloadTask?.cancel()
         downloadTask = nil
         isDownloading = false
-        statusMessage = "Download cancelled"
+        statusMessage = "Cancelling download..."
+
+        // Tell the backend to cancel the download
+        Task {
+            await sendCancelRequest()
+        }
+    }
+
+    /// Send cancel request to the Python backend
+    private func sendCancelRequest() async {
+        var request = URLRequest(url: Self.cancelURL)
+        request.httpMethod = "POST"
+
+        do {
+            let (_, _) = try await URLSession.shared.data(for: request)
+            statusMessage = "Download cancelled"
+        } catch {
+            // Cancel request failed, but we've already stopped polling locally
+            statusMessage = "Download cancelled (cleanup may be pending)"
+        }
     }
 
     // MARK: - Private Implementation

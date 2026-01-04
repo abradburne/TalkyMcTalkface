@@ -4,9 +4,8 @@ PyInstaller spec file for TalkyMcTalkface.
 
 Bundles the Python TTS server with all dependencies including:
 - FastAPI/Uvicorn server
-- PyTorch with MPS support for Apple Silicon
-- Chatterbox TTS model dependencies
-- Perth watermarker (with patch preserved)
+- MLX framework for Apple Silicon
+- MLX-Audio Chatterbox TTS
 - All application source files and data
 
 Usage:
@@ -62,21 +61,31 @@ hidden_imports = [
     'sqlalchemy.ext.asyncio',
     'aiosqlite',
 
-    # PyTorch and audio
-    'torch',
-    'torch.backends.mps',
-    'torch._dynamo',
-    'torch._inductor',
-    'torch.distributed',
-    'torchaudio',
-    'torchaudio.backend',
-    'torchaudio.backend.soundfile_backend',
+    # MLX framework
+    'mlx',
+    'mlx.core',
+    'mlx.nn',
+    'mlx.optimizers',
+    'mlx.utils',
 
-    # Chatterbox TTS and dependencies
-    'chatterbox',
-    'chatterbox.tts_turbo',
-    'perth',
-    'perth.audioseal',
+    # MLX-Audio TTS
+    'mlx_audio',
+    'mlx_audio.tts',
+    'mlx_audio.tts.models',
+    'mlx_audio.tts.models.chatterbox',
+    'mlx_audio.tts.generate',
+    'mlx_audio.tts.utils',
+    'mlx_audio.tts.audio_player',
+
+    # MLX-LM (required by chatterbox)
+    'mlx_lm',
+    'mlx_lm.models',
+    'mlx_lm.models.cache',
+
+    # Audio I/O
+    'sounddevice',
+
+    # Transformers and HuggingFace
     'transformers',
     'transformers.models',
     'tokenizers',
@@ -113,6 +122,7 @@ hidden_imports = [
     'app.routers.health',
     'app.routers.voices',
     'app.routers.jobs',
+    'app.routers.model',
     'app.schemas',
     'app.schemas.job',
     'app.schemas.voice',
@@ -122,7 +132,7 @@ hidden_imports = [
 ]
 
 # Collect all submodules for complex packages
-for pkg in ['torch', 'torchaudio', 'transformers', 'chatterbox', 'perth', 'scipy']:
+for pkg in ['mlx', 'mlx_audio', 'mlx_lm', 'transformers', 'scipy']:
     try:
         hidden_imports.extend(collect_submodules(pkg))
     except Exception:
@@ -143,21 +153,12 @@ datas = [
 ]
 
 # Collect data files from dependencies
-for pkg in ['torch', 'torchaudio', 'transformers', 'tokenizers', 'chatterbox', 'perth', 'PIL']:
+for pkg in ['mlx', 'mlx_audio', 'transformers', 'tokenizers', 'PIL']:
     try:
         pkg_datas = collect_data_files(pkg)
         datas.extend(pkg_datas)
     except Exception:
         pass
-
-# Explicitly collect PIL/Pillow (all data, binaries, and submodules)
-try:
-    pil_datas, pil_binaries, pil_hiddenimports = collect_all('PIL')
-    datas.extend(pil_datas)
-    binaries.extend(pil_binaries)
-    hidden_imports.extend(pil_hiddenimports)
-except Exception:
-    pass
 
 # -------------------------------------------------------------------
 # Binary Dependencies
@@ -175,12 +176,14 @@ try:
 except ImportError:
     pass
 
-# MPS framework path for Apple Silicon
-if IS_ARM64:
-    mps_path = '/System/Library/Frameworks/Metal.framework'
-    if Path(mps_path).exists():
-        # Metal framework is system-provided, no need to bundle
-        pass
+# Explicitly collect PIL/Pillow (all data, binaries, and submodules)
+try:
+    pil_datas, pil_binaries, pil_hiddenimports = collect_all('PIL')
+    datas.extend(pil_datas)
+    binaries.extend(pil_binaries)
+    hidden_imports.extend(pil_hiddenimports)
+except Exception:
+    pass
 
 
 # -------------------------------------------------------------------
@@ -199,11 +202,12 @@ a = Analysis(
     excludes=[
         # Exclude unused heavy packages
         'matplotlib',
-        'PIL',
         'cv2',
         'opencv',
         'tensorflow',
         'keras',
+        'torch',  # Using MLX instead
+        'torchaudio',
         'IPython',
         'jupyter',
         'notebook',
@@ -247,7 +251,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # UPX can cause issues with PyTorch
+    upx=False,  # UPX can cause issues
     console=True,  # Server needs console for logging
     disable_windowed_traceback=False,
     target_arch=None,
@@ -286,10 +290,7 @@ coll = COLLECT(
 # 2. The Swift app should launch:
 #    Contents/Resources/python-backend/TalkyMcTalkface
 #
-# 3. The Perth watermarker patch is preserved because server.py
-#    applies it before importing chatterbox.
-#
-# 4. Voice prompts are managed by users in:
+# 3. Voice prompts are managed by users in:
 #    ~/Library/Application Support/TalkyMcTalkface/voices/
 #
 # To build:

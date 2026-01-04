@@ -187,30 +187,57 @@ fi
 
 # Sign Python backend if present
 PYTHON_BACKEND="${APP_PATH}/Contents/Resources/python-backend"
+PYTHON_ENTITLEMENTS="${SCRIPT_DIR}/python-backend.entitlements"
+
 if [[ -d "${PYTHON_BACKEND}" ]]; then
     log_info "Signing Python backend..."
 
-    # Sign the main executable
-    if [[ -f "${PYTHON_BACKEND}/TalkyMcTalkface" ]]; then
-        sign_item "${PYTHON_BACKEND}/TalkyMcTalkface" "${SIGNING_IDENTITY}" "" "runtime"
+    # PyInstaller executables need special entitlements for hardened runtime
+    # because they load code dynamically at runtime
+    if [[ ! -f "${PYTHON_ENTITLEMENTS}" ]]; then
+        log_warn "Python backend entitlements not found: ${PYTHON_ENTITLEMENTS}"
+        log_warn "Signing without entitlements may cause the backend to crash"
     fi
 
-    # Sign all .so files (Python extensions)
+    # Sign the main executable with PyInstaller-specific entitlements
+    if [[ -f "${PYTHON_BACKEND}/TalkyMcTalkface" ]]; then
+        sign_item "${PYTHON_BACKEND}/TalkyMcTalkface" "${SIGNING_IDENTITY}" "${PYTHON_ENTITLEMENTS}" "runtime"
+    fi
+
+    # Sign all .so files (Python extensions) - these also need the entitlements
     find "${PYTHON_BACKEND}" -name "*.so" -type f | while read -r so_file; do
-        sign_item "${so_file}" "${SIGNING_IDENTITY}" "" "runtime"
+        sign_item "${so_file}" "${SIGNING_IDENTITY}" "${PYTHON_ENTITLEMENTS}" "runtime"
     done
 
     # Sign all dylibs in the backend
     find "${PYTHON_BACKEND}" -name "*.dylib" -type f | while read -r dylib; do
-        sign_item "${dylib}" "${SIGNING_IDENTITY}" "" "runtime"
+        sign_item "${dylib}" "${SIGNING_IDENTITY}" "${PYTHON_ENTITLEMENTS}" "runtime"
+    done
+
+    # Sign ALL Mach-O executables (e.g., torch/bin/protoc, torch_shm_manager)
+    # These are binaries without extensions that also need signing for notarization
+    log_info "Signing Mach-O executables in Python backend..."
+    find "${PYTHON_BACKEND}" -type f -perm +111 | while read -r exec_file; do
+        # Skip files we already signed (main executable, .so, .dylib)
+        if [[ "${exec_file}" == "${PYTHON_BACKEND}/TalkyMcTalkface" ]]; then
+            continue
+        fi
+        if [[ "${exec_file}" == *.so || "${exec_file}" == *.dylib ]]; then
+            continue
+        fi
+        # Check if it's a Mach-O binary
+        if file "${exec_file}" | grep -q "Mach-O"; then
+            sign_item "${exec_file}" "${SIGNING_IDENTITY}" "${PYTHON_ENTITLEMENTS}" "runtime"
+        fi
     done
 fi
 
-# Sign any other executables in Resources
+# Sign any other executables in Resources (excluding python-backend which was already signed)
 RESOURCES_DIR="${APP_PATH}/Contents/Resources"
 if [[ -d "${RESOURCES_DIR}" ]]; then
     # Find executable files (but not Python scripts or other text files)
-    find "${RESOURCES_DIR}" -type f -perm +111 | while read -r exec_file; do
+    # Skip python-backend directory as it was already signed with proper entitlements
+    find "${RESOURCES_DIR}" -type f -perm +111 -not -path "*/python-backend/*" | while read -r exec_file; do
         # Skip if not a Mach-O binary
         if file "${exec_file}" | grep -q "Mach-O"; then
             sign_item "${exec_file}" "${SIGNING_IDENTITY}" "" "runtime"

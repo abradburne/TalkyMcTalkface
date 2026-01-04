@@ -1,5 +1,5 @@
 """
-TTS Service encapsulating Chatterbox TurboTTS model state.
+TTS Service encapsulating MLX Chatterbox model state.
 """
 import asyncio
 from pathlib import Path
@@ -7,7 +7,7 @@ from typing import Dict, Optional, List
 from concurrent.futures import ThreadPoolExecutor
 import functools
 
-from app.config import VOICES_DIR, MODEL_DEVICE, AUDIO_DIR, MODEL_AGGRESSIVE_MEMORY
+from app.config import VOICES_DIR, AUDIO_DIR, MLX_MODEL_REPO, TTS_SAMPLE_RATE
 
 
 class Voice:
@@ -21,38 +21,86 @@ class Voice:
 
 class TTSService:
     """
-    Encapsulates TTS model state and generation logic.
+    Encapsulates TTS model state and generation logic using MLX Chatterbox.
 
-    Provides async-safe methods for TTS generation using Chatterbox TurboTTS.
-    Uses asyncio.Lock to prevent concurrent model access (model is not thread-safe).
+    Provides async-safe methods for TTS generation.
+    Uses asyncio.Lock to prevent concurrent model access.
     """
+
+    MODEL_REPO_ID = MLX_MODEL_REPO
 
     def __init__(self):
         self.model = None
-        self.default_conds = None
         self._voices: Dict[str, Voice] = {}
         self._lock = asyncio.Lock()
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._loaded = False
+        self._loading = False
 
     @property
     def is_loaded(self) -> bool:
         """Check if the model is loaded."""
         return self._loaded and self.model is not None
 
-    def load_model(self):
-        """
-        Load the Chatterbox TurboTTS model.
+    @property
+    def is_loading(self) -> bool:
+        """Check if the model is currently being loaded."""
+        return self._loading
 
-        Must be called from the main thread during startup.
-        The Perth watermarker patch must be applied before importing chatterbox.
+    def is_model_cached(self) -> bool:
         """
-        import torch
-        from chatterbox.tts_turbo import ChatterboxTurboTTS
+        Check if the MLX Chatterbox model is already cached locally.
 
-        self.model = ChatterboxTurboTTS.from_pretrained(device=MODEL_DEVICE)
-        self.default_conds = self.model.conds
-        self._loaded = True
+        This checks HuggingFace's cache without making network requests.
+        Returns True if the model files exist locally, False otherwise.
+        """
+        try:
+            from huggingface_hub import try_to_load_from_cache, _CACHED_NO_EXIST
+
+            # Check for MLX model config file to verify download completed
+            cached_path = try_to_load_from_cache(self.MODEL_REPO_ID, 'config.json')
+
+            if cached_path is None or cached_path is _CACHED_NO_EXIST:
+                return False
+            return isinstance(cached_path, str)
+        except Exception:
+            return False
+
+    def load_model(self, local_only: bool = False):
+        """
+        Load the MLX Chatterbox model.
+
+        Args:
+            local_only: If True, only load from cache (no downloads).
+                        Raises FileNotFoundError if not cached.
+        """
+        from mlx_audio.tts.utils import load_model
+
+        if local_only and not self.is_model_cached():
+            raise FileNotFoundError(
+                'Model not cached. Use /model/download to download the model first.'
+            )
+
+        self._loading = True
+        try:
+            self.model = load_model(self.MODEL_REPO_ID)
+            self._loaded = True
+        except OSError as e:
+            error_msg = str(e).lower()
+            if 'token' in error_msg or 'authentication' in error_msg or '401' in error_msg:
+                raise PermissionError(
+                    'HuggingFace authentication required. '
+                    'Set HF_TOKEN environment variable or run: huggingface-cli login'
+                ) from e
+            elif 'connection' in error_msg or 'network' in error_msg or 'timeout' in error_msg:
+                raise ConnectionError(
+                    f'Network error downloading model: {e}. '
+                    'Check your internet connection and try again.'
+                ) from e
+            else:
+                raise
+        finally:
+            self._loading = False
 
     def scan_voices(self) -> Dict[str, Voice]:
         """
@@ -60,20 +108,17 @@ class TTSService:
 
         Uses exact filename stem as both id and display_name:
             C3-PO.wav -> id=C3-PO, display_name=C3-PO
-            Jerry_Seinfeld.wav -> id=Jerry_Seinfeld, display_name=Jerry_Seinfeld
         """
         self._voices = {}
 
         if VOICES_DIR.exists():
             for f in VOICES_DIR.glob('*.wav'):
-                # Use exact filename stem for both id and display name
                 stem = f.stem
-
                 self._voices[stem] = Voice(
                     id=stem,
                     display_name=stem,
                     file_path=str(f),
-                    duration=None,  # Could be populated by analyzing audio file
+                    duration=None,
                 )
 
         return self._voices
@@ -90,50 +135,54 @@ class TTSService:
         """Get list of all voice IDs."""
         return list(self._voices.keys())
 
-    def _generate_sync(self, text: str, voice_path: Optional[str] = None) -> tuple:
+    def _generate_sync(self, text: str, output_path: Path, voice_path: Optional[str] = None) -> int:
         """
-        Synchronous generation method to run in executor.
+        Synchronous generation using MLX Chatterbox.
 
-        Returns tuple of (wav_tensor, sample_rate).
+        Returns file size in bytes.
         """
-        import torch
+        from mlx_audio.tts.generate import generate_audio
 
-        with torch.inference_mode():
-            if voice_path:
-                wav = self.model.generate(text, audio_prompt_path=voice_path)
-            else:
-                # Restore default voice conditionals
-                self.model.conds = self.default_conds
-                wav = self.model.generate(text)
+        output_dir = output_path.parent
+        output_stem = output_path.stem
 
-            # Synchronize MPS to ensure GPU operations complete before returning
-            # This prevents Metal assertion failures when tensors are freed
-            if torch.backends.mps.is_available():
-                torch.mps.synchronize()
+        # generate_audio creates files with pattern: {prefix}_0.wav
+        generate_audio(
+            text=text,
+            model=self.model,
+            ref_audio=voice_path,
+            file_prefix=str(output_dir / output_stem),
+            audio_format='wav',
+            play=False,
+            verbose=False,
+        )
 
-        # Move result to CPU and free GPU memory
-        wav_cpu = wav.cpu()
-        del wav
+        # Rename from {stem}_000.wav to expected path
+        # mlx_audio generates with 3-digit suffix: prefix_000.wav
+        generated_file = output_dir / f'{output_stem}_000.wav'
+        if generated_file.exists() and generated_file != output_path:
+            generated_file.rename(output_path)
 
-        if MODEL_AGGRESSIVE_MEMORY and torch.backends.mps.is_available():
-            torch.mps.empty_cache()
-
-        return wav_cpu, self.model.sr
+        return output_path.stat().st_size
 
     async def generate(self, text: str, voice_id: Optional[str] = None) -> tuple:
         """
         Generate TTS audio asynchronously.
 
-        Uses asyncio.Lock to ensure exclusive model access.
-        Runs actual generation in thread pool to avoid blocking event loop.
+        This method maintains API compatibility but now generates directly to a temp file
+        and returns the audio data.
 
         Args:
             text: Text to synthesize
             voice_id: Voice ID (None = default voice)
 
         Returns:
-            Tuple of (wav_tensor, sample_rate)
+            Tuple of (audio_array, sample_rate)
         """
+        import numpy as np
+        import scipy.io.wavfile as wav
+        import tempfile
+
         voice_path = None
         if voice_id:
             voice = self.get_voice(voice_id)
@@ -142,11 +191,21 @@ class TTSService:
 
         async with self._lock:
             loop = asyncio.get_event_loop()
-            wav, sr = await loop.run_in_executor(
+
+            # Generate to temp file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+
+            await loop.run_in_executor(
                 self._executor,
-                functools.partial(self._generate_sync, text, voice_path)
+                functools.partial(self._generate_sync, text, tmp_path, voice_path)
             )
-            return wav, sr
+
+            # Read back the audio
+            sr, audio = wav.read(str(tmp_path))
+            tmp_path.unlink()  # Clean up temp file
+
+            return audio, sr
 
     async def generate_to_file(self, text: str, output_path: Path, voice_id: Optional[str] = None) -> int:
         """
@@ -160,23 +219,26 @@ class TTSService:
         Returns:
             File size in bytes
         """
-        import torchaudio as ta
+        voice_path = None
+        if voice_id:
+            voice = self.get_voice(voice_id)
+            if voice:
+                voice_path = voice.file_path
 
-        wav, sr = await self.generate(text, voice_id)
-
-        # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Save audio file
-        ta.save(str(output_path), wav, sr)
-
-        return output_path.stat().st_size
+        async with self._lock:
+            loop = asyncio.get_event_loop()
+            file_size = await loop.run_in_executor(
+                self._executor,
+                functools.partial(self._generate_sync, text, output_path, voice_path)
+            )
+            return file_size
 
     def cleanup(self):
         """Clean up resources."""
         self._executor.shutdown(wait=False)
         self.model = None
-        self.default_conds = None
         self._loaded = False
 
 

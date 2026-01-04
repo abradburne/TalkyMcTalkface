@@ -30,10 +30,11 @@ struct StatusPopoverView: View {
                     .foregroundStyle(.red)
             }
 
-            Divider()
-
-            // Controls
-            footerView
+            // Quit button only in settings view
+            if showingSettings {
+                Divider()
+                footerView
+            }
         }
         .padding()
         .frame(width: showingSettings ? 420 : 380) // Wider for settings
@@ -139,32 +140,71 @@ struct StatusPopoverView: View {
         VStack(spacing: 12) {
             ProgressView()
                 .controlSize(.large)
-            Text("Starting TalkyMcTalkface...")
+            Text(appState.loadingMessage)
                 .font(.body)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
     }
 
-    /// Error view
+    /// Error view with special handling for authentication errors
     private var errorView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
-                .foregroundStyle(.red)
-            Text("An error occurred")
-                .font(.body)
-                .foregroundStyle(.secondary)
-            Button("Retry") {
-                Task {
-                    await appState.startBackend()
+            if isAuthenticationError {
+                // Authentication error - show helpful guidance
+                Image(systemName: "key.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Authentication Required")
+                    .font(.headline)
+                Text("This model requires a HuggingFace account. Add your API token in Settings to continue.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                HStack(spacing: 12) {
+                    Button("Get Token") {
+                        if let url = URL(string: "https://huggingface.co/settings/tokens") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Open Settings") {
+                        showingSettings = true
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
+            } else {
+                // Generic error
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.red)
+                Text("An error occurred")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                Button("Retry") {
+                    Task {
+                        await appState.startBackend()
+                    }
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+    }
+
+    /// Check if the current error is an authentication error
+    private var isAuthenticationError: Bool {
+        guard let error = appState.errorMessage?.lowercased() else { return false }
+        return error.contains("authentication") ||
+               error.contains("token") ||
+               error.contains("401") ||
+               error.contains("huggingface")
     }
 
     /// View displayed when model download is required
@@ -264,6 +304,9 @@ struct StatusPopoverView: View {
 
     /// Task 2.4: Graceful shutdown when quitting
     private func quitApplication() {
+        showingSettings = false
+        appState.loadingMessage = "Shutting down..."
+        appState.setStatus(.loading)
         Task {
             await appState.stopBackend()
             await MainActor.run {
